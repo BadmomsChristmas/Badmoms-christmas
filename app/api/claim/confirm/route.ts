@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     });
     if (!family) continue;
     const allClaimed = family.children.every(
-      (c: { status: string }) => c.status === "CLAIMED" || c.status === "DROPPED_OFF"
+      (c) => c.status === "CLAIMED" || c.status === "DROPPED_OFF"
     );
     if (allClaimed) {
       await sendMomFullySponsoredNotice({

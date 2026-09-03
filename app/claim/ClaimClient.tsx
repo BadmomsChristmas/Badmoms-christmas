@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SleighIcon } from "@/components/decorations";
 
 type Child = {
   id: string;
@@ -25,14 +26,6 @@ type Family = {
   children: Child[];
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  UNCLAIMED: "needs a sponsor",
-  PENDING: "being claimed",
-  CLAIMED: "claimed",
-  DROPPED_OFF: "claimed",
-  RELEASED: "needs a sponsor",
-};
-
 const AGE_BRACKETS = [
   { value: "ALL", label: "All ages", min: 0, max: 18 },
   { value: "0-3", label: "0-3", min: 0, max: 3 },
@@ -41,6 +34,23 @@ const AGE_BRACKETS = [
   { value: "12-15", label: "12-15", min: 12, max: 15 },
   { value: "16-18", label: "16-18", min: 16, max: 18 },
 ];
+
+const BALL_COLORS = [
+  "radial-gradient(circle at 32% 28%,#f07a72,#e0483f 60%,#a82a24)",
+  "radial-gradient(circle at 32% 28%,#a98ce0,#7a5cc4 60%,#523791)",
+  "radial-gradient(circle at 32% 28%,#7fd9f2,#3f9dc2 60%,#22637d)",
+  "radial-gradient(circle at 32% 28%,#f7a9b8,#e0708c 60%,#a83c58)",
+];
+
+const WISH_NUMBER_CLASSES = ["wish-number--1", "wish-number--2", "wish-number--3"];
+
+function formatCountdown(ms: number) {
+  if (ms <= 0) return "0:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 export default function ClaimClient({ families }: { families: Family[] }) {
   const router = useRouter();
@@ -51,18 +61,40 @@ export default function ClaimClient({ families }: { families: Family[] }) {
   const [sponsorEmail, setSponsorEmail] = useState("");
   const [step, setStep] = useState<"select" | "reserved" | "confirmed">("select");
   const [claimGroupId, setClaimGroupId] = useState<string | null>(null);
+  const [lockExpiresAt, setLockExpiresAt] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [search, setSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState("ALL");
   const [ageFilter, setAgeFilter] = useState("ALL");
-  const [wholeFamilyOnly, setWholeFamilyOnly] = useState(false);
+  const [siblingsTogether, setSiblingsTogether] = useState(false);
+  const [sortFewestFirst, setSortFewestFirst] = useState(false);
 
-  function toggle(childId: string, available: boolean) {
+  // Tick every second so the reservation countdown stays live.
+  useEffect(() => {
+    if (step !== "reserved") return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [step]);
+
+  function toggleSelect(childId: string, available: boolean) {
     if (!available) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(childId)) next.delete(childId);
       else next.add(childId);
+      return next;
+    });
+  }
+
+  function selectWholeFamily(family: Family) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      family.children.forEach((c) => {
+        if (c.effectiveStatus === "UNCLAIMED") next.add(c.id);
+      });
       return next;
     });
   }
@@ -92,6 +124,9 @@ export default function ClaimClient({ families }: { families: Family[] }) {
         return;
       }
       setClaimGroupId(data.claimGroupId);
+      // 30 minutes from now, matching the server's lock window.
+      setLockExpiresAt(Date.now() + 30 * 60 * 1000);
+      setNow(Date.now());
       setStep("reserved");
     } catch {
       setError("Network error - please try again.");
@@ -123,197 +158,413 @@ export default function ClaimClient({ families }: { families: Family[] }) {
     }
   }
 
+  const activeBracket = AGE_BRACKETS.find((b) => b.value === ageFilter)!;
+
+  const visibleFamilies = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    const shaped = families.map((family) => {
+      const sponsoredCount = family.children.filter(
+        (c) => c.effectiveStatus === "CLAIMED" || c.effectiveStatus === "DROPPED_OFF"
+      ).length;
+      const hasUnclaimed = family.children.some((c) => c.effectiveStatus === "UNCLAIMED");
+
+      const matchingChildren = family.children.filter((c) => {
+        const genderOk = genderFilter === "ALL" || c.gender === genderFilter;
+        const ageOk = c.age >= activeBracket.min && c.age <= activeBracket.max;
+        const searchOk =
+          !q ||
+          c.firstName.toLowerCase().includes(q) ||
+          c.wishlist1.toLowerCase().includes(q) ||
+          c.wishlist2.toLowerCase().includes(q) ||
+          c.wishlist3.toLowerCase().includes(q) ||
+          (c.additionalComments || "").toLowerCase().includes(q);
+        return genderOk && ageOk && searchOk;
+      });
+
+      return { ...family, matchingChildren, sponsoredCount, hasUnclaimed };
+    });
+
+    const filtered = shaped
+      .filter((f) => f.matchingChildren.length > 0)
+      .filter((f) => !siblingsTogether || f.hasUnclaimed);
+
+    if (sortFewestFirst) {
+      filtered.sort((a, b) => a.sponsoredCount - b.sponsoredCount);
+    }
+
+    return filtered;
+  }, [families, search, genderFilter, activeBracket, siblingsTogether, sortFewestFirst]);
+
+  const totalMatchingKids = visibleFamilies.reduce((s, f) => s + f.matchingChildren.length, 0);
+
+  const cartNames = families
+    .flatMap((f) => f.children)
+    .filter((c) => selected.has(c.id))
+    .map((c) => c.firstName);
+
   if (step === "confirmed") {
     return (
-      <div className="alert alert--success">
-        Thank you, {sponsorName}! Your sponsorship is confirmed. Check your
-        email for drop-off details.
+      <div className="page" style={{ textAlign: "center" }}>
+        <div className="alert alert--success">
+          Thank you, {sponsorName}! Your sponsorship is confirmed. Check your
+          email for the full shopping list and drop-off details.
+        </div>
       </div>
     );
   }
 
-  const activeBracket = AGE_BRACKETS.find((b) => b.value === ageFilter)!;
-
-  const visibleFamilies = families
-    .map((family) => {
-      const wholeFamilyAvailable = family.children.every(
-        (c) => c.effectiveStatus === "UNCLAIMED"
-      );
-      const matchingChildren = family.children.filter((c) => {
-        const genderOk = genderFilter === "ALL" || c.gender === genderFilter;
-        const ageOk = c.age >= activeBracket.min && c.age <= activeBracket.max;
-        return genderOk && ageOk;
-      });
-      return { ...family, matchingChildren, wholeFamilyAvailable };
-    })
-    .filter((f) => f.matchingChildren.length > 0)
-    .filter((f) => !wholeFamilyOnly || f.wholeFamilyAvailable);
+  const remainingMs = lockExpiresAt ? lockExpiresAt - now : 0;
 
   return (
     <div>
       <div className="filter-bar">
-        <div className="filter-bar__field">
-          <label htmlFor="genderFilter">Gender</label>
-          <select
-            id="genderFilter"
-            value={genderFilter}
-            onChange={(e) => setGenderFilter(e.target.value)}
-          >
-            <option value="ALL">All</option>
-            <option value="Female">Female</option>
-            <option value="Male">Male</option>
-          </select>
-        </div>
-        <div className="filter-bar__field">
-          <label htmlFor="ageFilter">Age range</label>
-          <select
-            id="ageFilter"
-            value={ageFilter}
-            onChange={(e) => setAgeFilter(e.target.value)}
-          >
-            {AGE_BRACKETS.map((b) => (
-              <option key={b.value} value={b.value}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <label className="filter-bar__toggle">
-          <input
-            type="checkbox"
-            checked={wholeFamilyOnly}
-            onChange={(e) => setWholeFamilyOnly(e.target.checked)}
+        <div className="filter-search">
+          <span
+            style={{
+              width: 13,
+              height: 13,
+              borderRadius: "50%",
+              border: "2.5px solid #9dbccb",
+              flex: "none",
+            }}
           />
-          Only show whole families still needing a sponsor
-        </label>
+          <input
+            type="text"
+            placeholder='Search a wish - "boots", "Lego", "bike"…'
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="segmented">
+          <button
+            type="button"
+            className={genderFilter === "ALL" ? "active" : ""}
+            onClick={() => setGenderFilter("ALL")}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className={genderFilter === "Female" ? "active" : ""}
+            onClick={() => setGenderFilter("Female")}
+          >
+            Girls
+          </button>
+          <button
+            type="button"
+            className={genderFilter === "Male" ? "active" : ""}
+            onClick={() => setGenderFilter("Male")}
+          >
+            Boys
+          </button>
+        </div>
+
+        <div className="age-pills">
+          {AGE_BRACKETS.map((b) => (
+            <button
+              key={b.value}
+              type="button"
+              className={`age-pill ${ageFilter === b.value ? "active" : ""}`}
+              onClick={() => setAgeFilter(b.value)}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="switch-field">
+          <button
+            type="button"
+            className={`switch ${siblingsTogether ? "on" : ""}`}
+            onClick={() => setSiblingsTogether((v) => !v)}
+            aria-pressed={siblingsTogether}
+          >
+            <span className="switch__knob" />
+          </button>
+          <span className="switch-field__label">Only families still needing sponsors</span>
+        </div>
       </div>
 
-      {visibleFamilies.length === 0 && (
-        <div className="alert alert--info">
-          No children match these filters right now - try widening your
-          search.
+      <div className="results-bar">
+        <span className="results-bar__count">
+          <span className="results-bar__dot" />
+          {totalMatchingKids} {totalMatchingKids === 1 ? "kid" : "kids"} ·{" "}
+          {visibleFamilies.length} {visibleFamilies.length === 1 ? "family" : "families"} shown
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: "0.8rem", color: "#7fa3b3" }}>Sort</span>
+          <select
+            value={sortFewestFirst ? "fewest" : "default"}
+            onChange={(e) => setSortFewestFirst(e.target.value === "fewest")}
+          >
+            <option value="default">Family code</option>
+            <option value="fewest">Fewest sponsors first</option>
+          </select>
         </div>
-      )}
+      </div>
 
-      {visibleFamilies.map((family) => (
-        <div className="family-card" key={family.id}>
-          <div className="family-card__header">
-            <h3>
-              {family.familyCode}
-              {family.wholeFamilyAvailable && (
-                <span className="whole-family-badge">
-                  Whole family needs a sponsor
-                </span>
+      <div className="claim-body">
+        {visibleFamilies.length === 0 && (
+          <div className="alert alert--info">
+            No children match these filters right now - try widening your
+            search.
+          </div>
+        )}
+
+        {visibleFamilies.map((family) => (
+          <div className="family-group" key={family.id}>
+            <div className="family-group__header">
+              <h3>{family.familyCode}</h3>
+              <span
+                className={`family-badge ${family.sponsoredCount === 0 ? "family-badge--red" : "family-badge--gold"}`}
+              >
+                {family.children.length} kids ·{" "}
+                {family.sponsoredCount === 0
+                  ? "nobody yet"
+                  : `${family.sponsoredCount} sponsored`}
+              </span>
+              <div className="family-group__progress">
+                <div
+                  style={{
+                    width: `${(family.sponsoredCount / family.children.length) * 100}%`,
+                    height: "100%",
+                    borderRadius: 999,
+                  }}
+                />
+              </div>
+              {family.hasUnclaimed && step === "select" && (
+                <button
+                  type="button"
+                  className="pill-btn pill-btn--green pill-btn--small"
+                  onClick={() => selectWholeFamily(family)}
+                >
+                  Take the whole family
+                </button>
               )}
-            </h3>
-          </div>
-          <div className="family-card__body">
-            {family.matchingChildren.map((child) => {
-              const available = child.effectiveStatus === "UNCLAIMED";
-              const isSelected = selected.has(child.id);
-              return (
-                <div className="child-row" key={child.id}>
-                  <div className="child-row__info">
-                    <div className="child-row__name">
-                      {child.firstName} <span>#{child.submissionNumber}</span>
-                    </div>
-                    <div className="child-row__meta">
-                      {child.gender}, age {child.age} · clothing{" "}
-                      {child.clothingSize} · shoe {child.shoeSize}
-                      {child.clothingNeeds ? ` · ${child.clothingNeeds}` : ""}
-                    </div>
-                    <ul className="child-row__wishlist">
-                      <li>{child.wishlist1}</li>
-                      <li>{child.wishlist2}</li>
-                      <li>{child.wishlist3}</li>
-                    </ul>
-                    {child.additionalComments && (
-                      <p className="field__hint">{child.additionalComments}</p>
-                    )}
-                  </div>
-                  <div style={{ textAlign: "right", minWidth: 120 }}>
-                    <span className={`badge badge--${child.effectiveStatus.toLowerCase()}`}>
-                      {STATUS_LABEL[child.effectiveStatus] || child.effectiveStatus}
-                    </span>
-                    <br />
-                    {step === "select" && (
-                      <label
-                        className="checkbox-inline"
-                        style={{ justifyContent: "flex-end", marginTop: 8 }}
-                      >
-                        <input
-                          type="checkbox"
-                          disabled={!available}
-                          checked={isSelected}
-                          onChange={() => toggle(child.id, available)}
-                        />
-                        Select
-                      </label>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+            </div>
 
-      {step === "select" && selected.size > 0 && !showForm && (
-        <div className="alert alert--info">
-          {selected.size} {selected.size === 1 ? "child" : "children"}{" "}
-          selected.{" "}
-          <button className="btn btn--small" onClick={() => setShowForm(true)}>
-            Continue
-          </button>
-        </div>
-      )}
+            <div className="child-grid">
+              {family.matchingChildren.map((child, idx) => {
+                const inCart = selected.has(child.id);
+                const alreadyGone =
+                  !inCart &&
+                  child.effectiveStatus !== "UNCLAIMED";
+                const cardClass = alreadyGone
+                  ? "ornament-card ornament-card--claimed"
+                  : inCart
+                  ? "ornament-card ornament-card--in-cart"
+                  : "ornament-card";
+                const ballBackground = alreadyGone
+                  ? "#cfd8d5"
+                  : inCart
+                  ? "radial-gradient(circle at 32% 28%,#4fc79a,#2f8f6f 60%,#1c6349)"
+                  : BALL_COLORS[idx % BALL_COLORS.length];
+
+                return (
+                  <div className={cardClass} key={child.id}>
+                    <div
+                      className="ornament-card__ball"
+                      style={{
+                        background: ballBackground,
+                        borderColor: alreadyGone ? "#9fb2ad" : "#0f3f3a",
+                      }}
+                    />
+                    {alreadyGone && (
+                      <div className="ornament-card__sponsored-tag">Sponsored!</div>
+                    )}
+                    <div
+                      className="ornament-card__head"
+                      style={{
+                        background: alreadyGone ? "#e6e8e4" : "#dff0f8",
+                        borderColor: alreadyGone ? "#9fb2ad" : "#0f3f3a",
+                      }}
+                    >
+                      <div>
+                        <div className="ornament-card__name">{child.firstName}</div>
+                        <div className="ornament-card__meta">
+                          {child.gender === "Female" ? "Girl" : "Boy"} · age {child.age}
+                        </div>
+                      </div>
+                      <span
+                        className="ornament-card__id"
+                        style={{ background: alreadyGone ? "#6d817c" : "#2b6d84" }}
+                      >
+                        #{child.submissionNumber}
+                      </span>
+                    </div>
+                    <div className="ornament-card__body">
+                      <div className="tag-row">
+                        <span className="info-tag">clothes {child.clothingSize}</span>
+                        <span className="info-tag">shoe {child.shoeSize}</span>
+                      </div>
+
+                      {alreadyGone ? (
+                        <p className="note-box">
+                          Wish list is tucked away - {child.firstName} already
+                          has a sponsor. Thank you!
+                        </p>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="wishlist-heading">
+                              <span className="wishlist-heading__dot" />
+                              <span className="wishlist-heading__text">Wish list</span>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {[child.wishlist1, child.wishlist2, child.wishlist3].map(
+                                (wish, wIdx) => (
+                                  <div className="wish-item" key={wIdx}>
+                                    <span className={`wish-number ${WISH_NUMBER_CLASSES[wIdx]}`}>
+                                      {wIdx + 1}
+                                    </span>
+                                    {wish}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                          {child.additionalComments && (
+                            <p className="note-box">{child.additionalComments}</p>
+                          )}
+                        </>
+                      )}
+
+                      {step === "select" && (
+                        <button
+                          type="button"
+                          className={`pill-btn pill-btn--block ${
+                            alreadyGone ? "" : inCart ? "" : "pill-btn--red"
+                          }`}
+                          style={
+                            alreadyGone
+                              ? { background: "#dfe3df", color: "#8d9e99", boxShadow: "none", cursor: "not-allowed" }
+                              : inCart
+                              ? { background: "#dff0e8", color: "#1c6349", border: "3px solid #2f8f6f", boxShadow: "none" }
+                              : undefined
+                          }
+                          disabled={alreadyGone}
+                          onClick={() => toggleSelect(child.id, !alreadyGone)}
+                        >
+                          {alreadyGone
+                            ? "Already sponsored"
+                            : inCart
+                            ? "Take out of sleigh"
+                            : `Sponsor ${child.firstName}`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {step === "select" && showForm && (
-        <fieldset>
-          <legend>Your information</legend>
-          <div className="field">
-            <label>Name</label>
-            <input
-              type="text"
-              value={sponsorName}
-              onChange={(e) => setSponsorName(e.target.value)}
-            />
-          </div>
-          <div className="two-col">
+        <div className="page" style={{ maxWidth: 560 }}>
+          <div className="step-card" style={{ marginTop: 0 }}>
+            <h2 style={{ margin: "0 0 16px" }}>Your information</h2>
             <div className="field">
-              <label>Phone number</label>
+              <label>Name</label>
               <input
-                type="tel"
-                value={sponsorPhone}
-                onChange={(e) => setSponsorPhone(e.target.value)}
+                type="text"
+                value={sponsorName}
+                onChange={(e) => setSponsorName(e.target.value)}
               />
             </div>
-            <div className="field">
-              <label>Email address</label>
-              <input
-                type="email"
-                value={sponsorEmail}
-                onChange={(e) => setSponsorEmail(e.target.value)}
-              />
+            <div className="two-col">
+              <div className="field">
+                <label>Phone number</label>
+                <input
+                  type="tel"
+                  value={sponsorPhone}
+                  onChange={(e) => setSponsorPhone(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Email address</label>
+                <input
+                  type="email"
+                  value={sponsorEmail}
+                  onChange={(e) => setSponsorEmail(e.target.value)}
+                />
+              </div>
             </div>
+            {error && <div className="alert alert--error">{error}</div>}
+            <button onClick={handleReserve} disabled={submitting}>
+              {submitting
+                ? "Reserving..."
+                : `Reserve ${selected.size} ${selected.size === 1 ? "kid" : "kids"}`}
+            </button>
           </div>
-          {error && <div className="alert alert--error">{error}</div>}
-          <button onClick={handleReserve} disabled={submitting}>
-            {submitting ? "Reserving..." : `Reserve ${selected.size} ${selected.size === 1 ? "child" : "children"}`}
-          </button>
-        </fieldset>
+        </div>
       )}
 
       {step === "reserved" && (
-        <div className="alert alert--info">
-          <p>
-            Your selection is reserved for {30} minutes. Click below to
-            confirm your sponsorship.
-          </p>
+        <div className="page" style={{ maxWidth: 560 }}>
           {error && <div className="alert alert--error">{error}</div>}
-          <button onClick={handleConfirm} disabled={submitting}>
-            {submitting ? "Confirming..." : "Confirm my sponsorship"}
-          </button>
+        </div>
+      )}
+
+      {step === "select" && selected.size > 0 && (
+        <div className="sleigh-bar">
+          <div className="sleigh-bar__info">
+            <SleighIcon />
+            <div>
+              <div className="sleigh-bar__count">
+                {selected.size} {selected.size === 1 ? "kid" : "kids"} in your sleigh
+              </div>
+              <div className="sleigh-bar__meta">{cartNames.join(", ")}</div>
+            </div>
+          </div>
+          <div className="sleigh-bar__actions">
+            {showForm ? (
+              <button
+                type="button"
+                className="pill-btn pill-btn--ghost"
+                onClick={() => setShowForm(false)}
+              >
+                Back to browsing
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="pill-btn pill-btn--ghost"
+                  onClick={() => setSelected(new Set())}
+                >
+                  Clear sleigh
+                </button>
+                <button type="button" className="pill-btn" onClick={() => setShowForm(true)}>
+                  Confirm sponsorship
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {step === "reserved" && (
+        <div className="sleigh-bar">
+          <div className="sleigh-bar__info">
+            <SleighIcon />
+            <div>
+              <div className="sleigh-bar__count">
+                {selected.size} {selected.size === 1 ? "kid" : "kids"} in your sleigh
+              </div>
+              <div className="sleigh-bar__meta">
+                Held for {formatCountdown(remainingMs)} - {cartNames.join(", ")}
+              </div>
+            </div>
+          </div>
+          <div className="sleigh-bar__actions">
+            <button type="button" className="pill-btn" onClick={handleConfirm} disabled={submitting}>
+              {submitting ? "Confirming..." : "Confirm sponsorship"}
+            </button>
+          </div>
         </div>
       )}
     </div>

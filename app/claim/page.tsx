@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { config } from "@/lib/config";
+import { ChristmasLights, LogoMark, SnowOverlay, ReindeerOrnament } from "@/components/decorations";
 import ClaimClient from "./ClaimClient";
 
 export const dynamic = "force-dynamic"; // always show live claim status, never cache
@@ -51,28 +52,63 @@ export default async function ClaimPage() {
     // Hide families with no children left to show (shouldn't happen, but safe)
     .filter((f) => f.children.length > 0);
 
+  const totalKids = shaped.reduce((sum, f) => sum + f.children.length, 0);
+  const sponsoredKids = shaped.reduce(
+    (sum, f) =>
+      sum +
+      f.children.filter(
+        (c) => c.effectiveStatus === "CLAIMED" || c.effectiveStatus === "DROPPED_OFF"
+      ).length,
+    0
+  );
+  const percent = totalKids > 0 ? Math.round((sponsoredKids / totalKids) * 100) : 0;
+
   return (
     <div>
       <header className="site-header">
         <div className="site-header__inner">
-          <p className="site-header__title">{config.orgName}</p>
+          <p className="site-header__title">
+            <LogoMark />
+            {config.orgName}
+          </p>
           <nav className="site-header__nav">
-            <a href="/family-form">Submit a Family</a>
+            <a href="/family-form">Sign up my family</a>
           </nav>
         </div>
       </header>
-      <main className="page page--wide">
-        <h1>🎁 Sponsor a Child</h1>
-        <p className="intro">
-          Children are grouped by family below. You can sponsor one child, a
-          whole sibling group, or as many as you're able. Selections are held
-          for {config.claimLockMinutes} minutes while you finish - if you
-          don't confirm in that time, the spot opens back up. Drop-off is{" "}
-          {config.dropoffDate}, {config.dropoffWindow} at{" "}
-          {config.dropoffLocation}.
-        </p>
-        <ClaimClient families={shaped} />
-      </main>
+      <ChristmasLights />
+
+      <div className="hero">
+        <SnowOverlay />
+        <ReindeerOrnament />
+        <div className="hero__flex">
+          <div style={{ maxWidth: 560, textAlign: "left" }}>
+            <span className="hero__eyebrow">Sponsor a kid</span>
+            <h1>Pick a name off the tree</h1>
+            <p>
+              Take one kiddo, a whole sibling set, or as many as your heart
+              allows. We hold your picks for {config.claimLockMinutes} minutes
+              while you finish.
+            </p>
+          </div>
+          <div className="hero__stats-card">
+            <div style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
+              <span className="hero__stats-count">{sponsoredKids}</span>
+              <span className="hero__stats-label">of {totalKids} kids sponsored</span>
+            </div>
+            <div className="hero__progress-track">
+              <div className="hero__progress-fill" style={{ width: `${percent}%` }} />
+            </div>
+            <p className="hero__stats-meta">
+              Drop-off {config.dropoffDate} · {config.dropoffWindow}
+              <br />
+              {config.dropoffLocation}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <ClaimClient families={shaped} />
     </div>
   );
 }

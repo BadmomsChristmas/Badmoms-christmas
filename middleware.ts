@@ -18,7 +18,8 @@ async function isAuthenticated(req: NextRequest): Promise<boolean> {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-const isAdminPage = pathname.startsWith("/admin") && pathname !== "/admin/login";
+
+  const isAdminPage = pathname.startsWith("/admin") && pathname !== "/admin/login";
   // The login endpoint itself must stay open - otherwise nobody could ever
   // log in, since logging in would require already being logged in.
   const isAdminApi =

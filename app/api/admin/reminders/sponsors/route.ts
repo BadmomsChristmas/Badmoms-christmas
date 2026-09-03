@@ -11,7 +11,10 @@ export async function POST() {
     include: { child: { include: { family: true } } },
   });
 
-  const bySponsor: Map<string, { sponsorName: string; children: SponsoredChildDetail[] }> = new Map();
+  const bySponsor = new Map<
+    string,
+    { sponsorName: string; children: SponsoredChildDetail[] }
+  >();
 
   for (const claim of claims) {
     const key = claim.sponsorEmail;

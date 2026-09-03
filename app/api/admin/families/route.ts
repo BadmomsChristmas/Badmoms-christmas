@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 // it takes no request params), which fails because there's no live database
 // connection available during the build step.
 export const dynamic = "force-dynamic";
+
 export async function GET() {
   const families = await prisma.family.findMany({
     orderBy: { createdAt: "asc" },
