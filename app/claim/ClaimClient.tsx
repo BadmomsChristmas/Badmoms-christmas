@@ -304,4 +304,18 @@ export default function ClaimClient({ families }: { families: Family[] }) {
         </fieldset>
       )}
 
-      {step ===
+      {step === "reserved" && (
+        <div className="alert alert--info">
+          <p>
+            Your selection is reserved for {30} minutes. Click below to
+            confirm your sponsorship.
+          </p>
+          {error && <div className="alert alert--error">{error}</div>}
+          <button onClick={handleConfirm} disabled={submitting}>
+            {submitting ? "Confirming..." : "Confirm my sponsorship"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
