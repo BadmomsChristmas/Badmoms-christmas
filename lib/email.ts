@@ -41,19 +41,57 @@ const wrapper = (body: string) => `
   </div>
 `;
 
+export type SponsoredChildDetail = {
+  familyCode: string;
+  firstName: string;
+  submissionNumber: number;
+  age: number;
+  gender: string;
+  clothingSize: string;
+  shoeSize: string;
+  clothingNeeds?: string | null;
+  wishlist1: string;
+  wishlist2: string;
+  wishlist3: string;
+  additionalComments?: string | null;
+  householdNeeds?: string | null;
+};
+
+function childDetailBlock(c: SponsoredChildDetail) {
+  return `
+    <div style="border: 1px solid #e0dccd; border-radius: 4px; padding: 14px 18px; margin-bottom: 14px;">
+      <p style="margin: 0 0 6px; font-weight: bold; font-size: 1.05em;">
+        ${c.firstName} (#${c.submissionNumber}) - ${c.familyCode}
+      </p>
+      <p style="margin: 0 0 6px; color: #555;">
+        ${c.gender}, age ${c.age} &middot; clothing size ${c.clothingSize} &middot; shoe size ${c.shoeSize}
+        ${c.clothingNeeds ? ` &middot; ${c.clothingNeeds}` : ""}
+      </p>
+      <p style="margin: 0 0 4px; font-weight: bold;">Wishlist:</p>
+      <ul style="margin: 0 0 6px;">
+        <li>${c.wishlist1}</li>
+        <li>${c.wishlist2}</li>
+        <li>${c.wishlist3}</li>
+      </ul>
+      ${c.additionalComments ? `<p style="margin: 0 0 6px; color: #555;">Additional notes: ${c.additionalComments}</p>` : ""}
+      ${c.householdNeeds ? `<p style="margin: 0; color: #555;">Household needs: ${c.householdNeeds}</p>` : ""}
+    </div>
+  `;
+}
+
 export async function sendSponsorClaimConfirmation(opts: {
   to: string;
   sponsorName: string;
-  childLabels: string[]; // e.g. ["Family: Blue Family - Child #12"]
+  children: SponsoredChildDetail[];
 }) {
-  const list = opts.childLabels.map((c) => `<li>${c}</li>`).join("");
+  const blocks = opts.children.map(childDetailBlock).join("");
   await send(
     opts.to,
     `You're confirmed! Thank you for sponsoring with ${config.orgName}`,
     wrapper(`
       <p>Hi ${opts.sponsorName},</p>
-      <p>Thank you so much for claiming the following this year:</p>
-      <ul>${list}</ul>
+      <p>Thank you so much for claiming the following this year - here's everything you need to shop:</p>
+      ${blocks}
       <p>
         <strong>Drop-off:</strong> ${config.dropoffDate}, ${config.dropoffWindow}
         at ${config.dropoffLocation}.
@@ -66,16 +104,16 @@ export async function sendSponsorClaimConfirmation(opts: {
 export async function sendSponsorDropoffReminder(opts: {
   to: string;
   sponsorName: string;
-  childLabels: string[];
+  children: SponsoredChildDetail[];
 }) {
-  const list = opts.childLabels.map((c) => `<li>${c}</li>`).join("");
+  const blocks = opts.children.map(childDetailBlock).join("");
   await send(
     opts.to,
     `Reminder: Drop-off is coming up - ${config.orgName}`,
     wrapper(`
       <p>Hi ${opts.sponsorName},</p>
-      <p>Just a friendly reminder that drop-off for your sponsored child/children is coming up:</p>
-      <ul>${list}</ul>
+      <p>Just a friendly reminder that drop-off for your sponsored child/children is coming up. Here's a recap in case you still need it while finishing up shopping:</p>
+      ${blocks}
       <p>
         <strong>Drop-off:</strong> ${config.dropoffDate}, ${config.dropoffWindow}
         at ${config.dropoffLocation}.

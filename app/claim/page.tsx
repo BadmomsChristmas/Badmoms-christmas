@@ -62,7 +62,7 @@ export default async function ClaimPage() {
         </div>
       </header>
       <main className="page page--wide">
-        <h1>Sponsor a Child</h1>
+        <h1>🎁 Sponsor a Child</h1>
         <p className="intro">
           Children are grouped by family below. You can sponsor one child, a
           whole sibling group, or as many as you're able. Selections are held

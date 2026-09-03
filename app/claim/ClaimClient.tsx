@@ -33,6 +33,15 @@ const STATUS_LABEL: Record<string, string> = {
   RELEASED: "needs a sponsor",
 };
 
+const AGE_BRACKETS = [
+  { value: "ALL", label: "All ages", min: 0, max: 18 },
+  { value: "0-3", label: "0-3", min: 0, max: 3 },
+  { value: "4-7", label: "4-7", min: 4, max: 7 },
+  { value: "8-11", label: "8-11", min: 8, max: 11 },
+  { value: "12-15", label: "12-15", min: 12, max: 15 },
+  { value: "16-18", label: "16-18", min: 16, max: 18 },
+];
+
 export default function ClaimClient({ families }: { families: Family[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -44,6 +53,9 @@ export default function ClaimClient({ families }: { families: Family[] }) {
   const [claimGroupId, setClaimGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [genderFilter, setGenderFilter] = useState("ALL");
+  const [ageFilter, setAgeFilter] = useState("ALL");
+  const [wholeFamilyOnly, setWholeFamilyOnly] = useState(false);
 
   function toggle(childId: string, available: boolean) {
     if (!available) return;
@@ -120,15 +132,83 @@ export default function ClaimClient({ families }: { families: Family[] }) {
     );
   }
 
+  const activeBracket = AGE_BRACKETS.find((b) => b.value === ageFilter)!;
+
+  const visibleFamilies = families
+    .map((family) => {
+      const wholeFamilyAvailable = family.children.every(
+        (c) => c.effectiveStatus === "UNCLAIMED"
+      );
+      const matchingChildren = family.children.filter((c) => {
+        const genderOk = genderFilter === "ALL" || c.gender === genderFilter;
+        const ageOk = c.age >= activeBracket.min && c.age <= activeBracket.max;
+        return genderOk && ageOk;
+      });
+      return { ...family, matchingChildren, wholeFamilyAvailable };
+    })
+    .filter((f) => f.matchingChildren.length > 0)
+    .filter((f) => !wholeFamilyOnly || f.wholeFamilyAvailable);
+
   return (
     <div>
-      {families.map((family) => (
+      <div className="filter-bar">
+        <div className="filter-bar__field">
+          <label htmlFor="genderFilter">Gender</label>
+          <select
+            id="genderFilter"
+            value={genderFilter}
+            onChange={(e) => setGenderFilter(e.target.value)}
+          >
+            <option value="ALL">All</option>
+            <option value="Female">Female</option>
+            <option value="Male">Male</option>
+          </select>
+        </div>
+        <div className="filter-bar__field">
+          <label htmlFor="ageFilter">Age range</label>
+          <select
+            id="ageFilter"
+            value={ageFilter}
+            onChange={(e) => setAgeFilter(e.target.value)}
+          >
+            {AGE_BRACKETS.map((b) => (
+              <option key={b.value} value={b.value}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="filter-bar__toggle">
+          <input
+            type="checkbox"
+            checked={wholeFamilyOnly}
+            onChange={(e) => setWholeFamilyOnly(e.target.checked)}
+          />
+          Only show whole families still needing a sponsor
+        </label>
+      </div>
+
+      {visibleFamilies.length === 0 && (
+        <div className="alert alert--info">
+          No children match these filters right now - try widening your
+          search.
+        </div>
+      )}
+
+      {visibleFamilies.map((family) => (
         <div className="family-card" key={family.id}>
           <div className="family-card__header">
-            <h3>{family.familyCode}</h3>
+            <h3>
+              {family.familyCode}
+              {family.wholeFamilyAvailable && (
+                <span className="whole-family-badge">
+                  Whole family needs a sponsor
+                </span>
+              )}
+            </h3>
           </div>
           <div className="family-card__body">
-            {family.children.map((child) => {
+            {family.matchingChildren.map((child) => {
               const available = child.effectiveStatus === "UNCLAIMED";
               const isSelected = selected.has(child.id);
               return (
@@ -224,18 +304,4 @@ export default function ClaimClient({ families }: { families: Family[] }) {
         </fieldset>
       )}
 
-      {step === "reserved" && (
-        <div className="alert alert--info">
-          <p>
-            Your selection is reserved for {30} minutes. Click below to
-            confirm your sponsorship.
-          </p>
-          {error && <div className="alert alert--error">{error}</div>}
-          <button onClick={handleConfirm} disabled={submitting}>
-            {submitting ? "Confirming..." : "Confirm my sponsorship"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+      {step ===

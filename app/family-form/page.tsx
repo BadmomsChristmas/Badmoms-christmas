@@ -131,7 +131,7 @@ export default function FamilyFormPage() {
 
   return (
     <div className="page">
-      <h1>Family Submission</h1>
+      <h1>🎄 Family Submission</h1>
       <p className="intro">
         Please submit one form per family, adding every child you'd like
         considered below. Deadline to submit is {config.submissionDeadline} -

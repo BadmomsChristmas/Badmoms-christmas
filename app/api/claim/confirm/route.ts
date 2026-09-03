@@ -50,14 +50,26 @@ export async function POST(req: NextRequest) {
   });
 
   const first = claims[0];
-  const childLabels = claims.map(
-    (c) => `${c.child.family.familyCode} - ${c.child.firstName} (#${c.child.submissionNumber})`
-  );
+  const childDetails = claims.map((c) => ({
+    familyCode: c.child.family.familyCode,
+    firstName: c.child.firstName,
+    submissionNumber: c.child.submissionNumber,
+    age: c.child.age,
+    gender: c.child.gender,
+    clothingSize: c.child.clothingSize,
+    shoeSize: c.child.shoeSize,
+    clothingNeeds: c.child.clothingNeeds,
+    wishlist1: c.child.wishlist1,
+    wishlist2: c.child.wishlist2,
+    wishlist3: c.child.wishlist3,
+    additionalComments: c.child.additionalComments,
+    householdNeeds: c.child.family.householdNeeds,
+  }));
 
   await sendSponsorClaimConfirmation({
     to: first.sponsorEmail,
     sponsorName: first.sponsorName,
-    childLabels,
+    children: childDetails,
   });
 
   // Check each affected family: if every child is now claimed, notify mom.
@@ -69,7 +81,7 @@ export async function POST(req: NextRequest) {
     });
     if (!family) continue;
     const allClaimed = family.children.every(
-      (c) => c.status === "CLAIMED" || c.status === "DROPPED_OFF"
+      (c: { status: string }) => c.status === "CLAIMED" || c.status === "DROPPED_OFF"
     );
     if (allClaimed) {
       await sendMomFullySponsoredNotice({

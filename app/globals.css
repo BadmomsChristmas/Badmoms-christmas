@@ -26,10 +26,24 @@ body {
 
 body {
   background: var(--cream);
+  background-image: radial-gradient(circle, #e6dfce 1px, transparent 1px);
+  background-size: 22px 22px;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
+}
+
+.candy-stripe {
+  height: 6px;
+  width: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cranberry),
+    var(--cranberry) 12px,
+    var(--cream) 12px,
+    var(--cream) 24px
+  );
 }
 
 h1,
@@ -72,6 +86,10 @@ a {
   border-bottom: 3px solid var(--evergreen);
   padding: 20px;
   background: var(--evergreen-dark);
+}
+
+.site-header__title::before {
+  content: "🎄 ";
 }
 
 .site-header__inner {
@@ -292,6 +310,7 @@ button:disabled {
   margin-bottom: 24px;
   overflow: hidden;
   background: #fff;
+  box-shadow: 0 2px 8px rgba(31, 61, 43, 0.06);
 }
 
 .family-card__header {
@@ -300,6 +319,21 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.family-card__header h3::before {
+  content: "🎁 ";
+}
+
+.whole-family-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--gold);
+  color: #4a3a08;
+  margin-left: 10px;
 }
 
 .family-card__header h3 {
@@ -457,21 +491,35 @@ th {
   border-bottom-color: var(--cranberry);
 }
 
-.checkbox-inline {
+.filter-bar {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 400;
-}
-
-.checkbox-inline input {
-  width: auto;
-}
-
-.table-wrap {
-  overflow-x: auto;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  background: #fff;
   border: 1px solid var(--stone-dark);
   border-radius: var(--radius);
-  max-height: 70vh;
-  overflow-y: auto;
+  padding: 16px 18px;
+  margin-bottom: 24px;
 }
+
+.filter-bar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-bar__field label {
+  margin-bottom: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.filter-bar__field select {
+  min-width: 160px;
+}
+
+.filter-bar__toggle {
+  display: flex;
