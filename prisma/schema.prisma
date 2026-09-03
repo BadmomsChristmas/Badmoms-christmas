@@ -1,0 +1,161 @@
+// Bad Moms Christmas - database schema
+//
+// Design notes (matching the spec):
+// - A "Family" is one household submission: mom's contact info (admin-only,
+//   never exposed to sponsors), household needs, and a couple of yes/no asks.
+// - Each Family has 1-N Children. Children get a sequential public
+//   submissionNumber (assigned in the order they're entered) but are always
+//   linked back to their Family via familyId - this is what lets siblings be
+//   grouped together even if their numbers aren't consecutive.
+// - A Claim is created when a sponsor claims a child. Claiming is
+//   whole-child-or-nothing. A claim starts in "pending" status with a
+//   30-minute lock; if the sponsor never confirms, a cron job releases it
+//   automatically. Only an admin can manually release a confirmed claim.
+// - Nothing here stores photos or addresses - matches "no marketing photos,
+//   no address collected" from the spec.
+
+datasource db {
+  provider = "postgresql" // switch to "sqlite" for local dev if you prefer
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum FamilyStatus {
+  ACTIVE
+  FLAGGED // manually flagged by admin, e.g. suspected duplicate
+  REMOVED // manually removed by admin, e.g. confirmed duplicate
+}
+
+enum ChildStatus {
+  UNCLAIMED
+  PENDING // a claim exists but hasn't been confirmed / is within the lock window
+  CLAIMED // claim confirmed
+  DROPPED_OFF
+  RELEASED // was claimed, sponsor dropped out, admin released it back to pool
+}
+
+enum ClaimStatus {
+  PENDING
+  CONFIRMED
+  DROPPED_OFF
+  RELEASED
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+model Family {
+  id       String @id @default(cuid())
+  // Human-friendly code shown to admins and (in a de-identified way) to
+  // sponsors when grouping siblings, e.g. "Blue Family"
+  familyCode String @unique
+
+  // --- Mom / household contact info: ADMIN-ONLY, never returned to
+  // sponsor-facing API routes or pages. ---
+  momName  String
+  momPhone String
+  momEmail String
+
+  householdNeeds                 String?
+  wantsDinner                    Boolean @default(false)
+  wantsWrappingPaper             Boolean @default(false)
+  acknowledgedSponsoredElsewhere Boolean @default(false)
+
+  status FamilyStatus @default(ACTIVE)
+
+  // Manual admin tracking - no auto-texting, just a record that it happened
+  momTexted      Boolean   @default(false)
+  momTextedAt    DateTime?
+  momTextedNotes String?
+
+  // Pickup day tracking (mom picks up 1-4pm on drop-off day)
+  pickupConfirmed   Boolean   @default(false)
+  pickupConfirmedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  children Child[]
+
+  @@index([status])
+}
+
+model Child {
+  id String @id @default(cuid())
+
+  // Sequential, assigned in order of entry - this is the public-facing ID
+  submissionNumber Int @unique @default(autoincrement())
+
+  familyId String
+  family   Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  firstName String
+  gender    String
+  age       Int
+
+  clothingSize  String
+  shoeSize      String // include type, e.g. "6 - sneakers"
+  clothingNeeds String?
+
+  wishlist1          String
+  wishlist2          String
+  wishlist3          String
+  additionalComments String?
+
+  status ChildStatus @default(UNCLAIMED)
+
+  droppedOff   Boolean   @default(false)
+  droppedOffAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim Claim?
+
+  @@index([familyId])
+  @@index([status])
+}
+
+model Claim {
+  id String @id @default(cuid())
+
+  childId String @unique
+  child   Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  // When a sponsor claims multiple siblings in one action, they all share
+  // this group id so admins can see/manage them together.
+  claimGroupId String?
+
+  sponsorName  String
+  sponsorPhone String
+  sponsorEmail String
+
+  status ClaimStatus @default(PENDING)
+
+  claimedAt     DateTime  @default(now())
+  lockExpiresAt DateTime // pending claims auto-release after this time
+  confirmedAt   DateTime?
+  droppedOffAt  DateTime?
+  releasedAt    DateTime?
+
+  // Manual texting log (you text from your phone; this just records it)
+  sponsorTexted      Boolean   @default(false)
+  sponsorTextedAt    DateTime?
+  sponsorTextedNotes String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([claimGroupId])
+}
