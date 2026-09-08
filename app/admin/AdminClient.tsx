@@ -19,7 +19,7 @@ type Child = {
   firstName: string;
   gender: string;
   age: number;
-  clothingSize: string;
+  clothingSize: string;  clothingNeeds: string | null;
   shoeSize: string;
   wishlist1: string;
   wishlist2: string;
@@ -288,7 +288,7 @@ export default function AdminClient({
                     <div className="child-row__meta">
                       {child.gender}, age {child.age} · clothing{" "}
                       {child.clothingSize} · shoe {child.shoeSize}
-                    </div>
+                                          {child.clothingNeeds ? ` · ${child.clothingNeeds}` : ""}</div>
                     <ul className="child-row__wishlist">
                       <li>{child.wishlist1}</li>
                       <li>{child.wishlist2}</li>
