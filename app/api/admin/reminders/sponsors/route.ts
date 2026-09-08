@@ -32,6 +32,7 @@ export async function POST() {
       wishlist3: claim.child.wishlist3,
       additionalComments: claim.child.additionalComments,
       householdNeeds: claim.child.family.householdNeeds,
+      wantsWrappingPaper: claim.child.family.wantsWrappingPaper,
     };
     if (!bySponsor.has(key)) {
       bySponsor.set(key, { sponsorName: claim.sponsorName, children: [detail] });

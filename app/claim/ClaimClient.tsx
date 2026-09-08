@@ -23,6 +23,8 @@ type Child = {
 type Family = {
   id: string;
   familyCode: string;
+  householdNeeds: string | null;
+  wantsWrappingPaper: boolean;
   children: Child[];
 };
 
@@ -345,6 +347,13 @@ export default function ClaimClient({ families }: { families: Family[] }) {
               )}
             </div>
 
+            {(family.householdNeeds || family.wantsWrappingPaper) && (
+              <p className="note-box" style={{ marginBottom: 14 }}>
+                {family.wantsWrappingPaper && "🎁 Wrapping paper & supplies would be appreciated. "}
+                {family.householdNeeds && `🏠 Household needs: ${family.householdNeeds}`}
+              </p>
+            )}
+
             <div className="child-grid">
               {family.matchingChildren.map((child, idx) => {
                 const inCart = selected.has(child.id);
@@ -398,6 +407,9 @@ export default function ClaimClient({ families }: { families: Family[] }) {
                       <div className="tag-row">
                         <span className="info-tag">clothes {child.clothingSize}</span>
                         <span className="info-tag">shoe {child.shoeSize}</span>
+                        {child.clothingNeeds && (
+                          <span className="info-tag">{child.clothingNeeds}</span>
+                        )}
                       </div>
 
                       {alreadyGone ? (

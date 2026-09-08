@@ -55,6 +55,7 @@ export type SponsoredChildDetail = {
   wishlist3: string;
   additionalComments?: string | null;
   householdNeeds?: string | null;
+  wantsWrappingPaper?: boolean;
 };
 
 function childDetailBlock(c: SponsoredChildDetail) {
@@ -74,7 +75,8 @@ function childDetailBlock(c: SponsoredChildDetail) {
         <li>${c.wishlist3}</li>
       </ul>
       ${c.additionalComments ? `<p style="margin: 0 0 6px; color: #555;">Additional notes: ${c.additionalComments}</p>` : ""}
-      ${c.householdNeeds ? `<p style="margin: 0; color: #555;">Household needs: ${c.householdNeeds}</p>` : ""}
+      ${c.householdNeeds ? `<p style="margin: 0 0 6px; color: #555;">Household needs: ${c.householdNeeds}</p>` : ""}
+      ${c.wantsWrappingPaper ? `<p style="margin: 0; color: #555;">Wrapping paper &amp; supplies would be appreciated.</p>` : ""}
     </div>
   `;
 }

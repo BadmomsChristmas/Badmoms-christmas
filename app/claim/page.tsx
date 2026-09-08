@@ -12,6 +12,8 @@ export default async function ClaimPage() {
     select: {
       id: true,
       familyCode: true,
+      householdNeeds: true,
+      wantsWrappingPaper: true,
       children: {
         orderBy: { submissionNumber: "asc" },
         select: {
@@ -41,6 +43,8 @@ export default async function ClaimPage() {
     .map((f) => ({
       id: f.id,
       familyCode: f.familyCode,
+      householdNeeds: f.householdNeeds,
+      wantsWrappingPaper: f.wantsWrappingPaper,
       children: f.children.map((c) => {
         const expired =
           c.claim?.status === "PENDING" &&

@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     wishlist3: c.child.wishlist3,
     additionalComments: c.child.additionalComments,
     householdNeeds: c.child.family.householdNeeds,
+    wantsWrappingPaper: c.child.family.wantsWrappingPaper,
   }));
 
   await sendSponsorClaimConfirmation({
