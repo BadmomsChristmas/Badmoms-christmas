@@ -22,7 +22,7 @@ Google Form + spreadsheet + Canva workflow with one system.
 - **Automatic 30-minute soft lock** - when a sponsor selects children, that
   spot is reserved for 30 minutes. If they never confirm, a background job
   releases it automatically so it doesn't get stuck.
-- **Emails** (via Resend) - sponsor claim confirmation, sponsor drop-off
+- **Emails** (via your own Gmail account) - sponsor claim confirmation, sponsor drop-off
   reminder (admin-triggered, sends to everyone with a confirmed claim), mom
   "you're fully sponsored" notice (sent automatically the moment the last
   child in a family gets claimed), and mom pickup reminder (admin-triggered).
@@ -43,9 +43,7 @@ Google Form + spreadsheet + Canva workflow with one system.
 - A **Postgres database**. The easiest free options:
   - [Neon](https://neon.tech) (recommended, generous free tier)
   - [Supabase](https://supabase.com)
-- A **[Resend](https://resend.com)** account for sending emails (free tier
-  covers small volumes easily). You'll need a "from" email address - Resend
-  lets you use their test domain to start, or verify your own domain later.
+- A Gmail account to send from (any regular Gmail address works, free).
 - A **[Vercel](https://vercel.com)** account for hosting (free tier is fine).
 
 ## 2. Local setup
@@ -59,11 +57,33 @@ cp .env.example .env
 Open `.env` and fill in:
 - `DATABASE_URL` - your Neon/Supabase connection string
 - `SESSION_SECRET` - any long random string (run `openssl rand -base64 32`)
-- `RESEND_API_KEY` and `EMAIL_FROM` - from your Resend account
+- `GMAIL_USER` and `GMAIL_APP_PASSWORD` - see "Setting up Gmail sending" below
+- `EMAIL_FROM` - usually the same as your Gmail address
 - The org/date/location fields at the bottom (already filled with your 2026
   details - update yearly)
 
 Then create the database tables:
+
+## Setting up Gmail sending
+
+Since emails send through your own Gmail account, Google requires an
+"app password" instead of your normal password (this keeps your real
+password safe even if something goes wrong with the app).
+
+1. Go to [myaccount.google.com/security](https://myaccount.google.com/security)
+   and make sure **2-Step Verification** is turned on (required for app
+   passwords to be available at all).
+2. Go directly to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+3. Under "App name," type something like `Bad Moms Christmas` and click
+   **Create**.
+4. Google will show you a 16-character password (like `abcd efgh ijkl mnop`).
+   Copy it - remove the spaces when you paste it into `.env` or Vercel, so
+   it's one continuous string.
+5. Set `GMAIL_USER` to your full Gmail address, and `GMAIL_APP_PASSWORD` to
+   that 16-character code.
+
+Gmail allows up to 500 emails per day this way, which is far more than
+you'll need for this project.
 
 ```bash
 npx prisma migrate dev --name init

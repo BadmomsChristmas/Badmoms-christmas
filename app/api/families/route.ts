@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateFamilyCode } from "@/lib/familyCode";
+import { getSubmissionsOpen } from "@/lib/settings";
 
 type ChildInput = {
   firstName: string;
@@ -16,6 +17,13 @@ type ChildInput = {
 };
 
 export async function POST(req: NextRequest) {
+  if (!(await getSubmissionsOpen())) {
+    return NextResponse.json(
+      { error: "Family sign-ups are currently closed." },
+      { status: 403 }
+    );
+  }
+
   let body: any;
   try {
     body = await req.json();

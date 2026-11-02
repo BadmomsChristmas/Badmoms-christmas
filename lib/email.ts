@@ -1,30 +1,39 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { config } from "./config";
 
-// Lazily construct the client so the app doesn't crash at import time if
-// RESEND_API_KEY isn't set yet (e.g. while you're still building locally).
-function getResend() {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
+// Sends through the admin's own Gmail account using an "app password"
+// (see README for how to generate one). This avoids needing to buy and
+// verify a custom domain - free, and fine for this project's volume
+// (Gmail allows up to 500 sends/day on a normal account).
+function getTransporter() {
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) {
     console.warn(
-      "RESEND_API_KEY is not set - emails will be logged instead of sent."
+      "GMAIL_USER / GMAIL_APP_PASSWORD are not set - emails will be logged instead of sent."
     );
     return null;
   }
-  return new Resend(key);
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
 }
 
 async function send(to: string, subject: string, html: string) {
-  const resend = getResend();
-  const from = process.env.EMAIL_FROM || "Bad Moms Christmas <no-reply@example.org>";
+  const transporter = getTransporter();
+  const from =
+    process.env.EMAIL_FROM ||
+    process.env.GMAIL_USER ||
+    "no-reply@example.org";
 
-  if (!resend) {
-    console.log(`[email suppressed - no API key] To: ${to} | Subject: ${subject}`);
+  if (!transporter) {
+    console.log(`[email suppressed - no Gmail credentials] To: ${to} | Subject: ${subject}`);
     return;
   }
 
   try {
-    await resend.emails.send({ from, to, subject, html });
+    await transporter.sendMail({ from, to, subject, html });
   } catch (err) {
     // Email failures should never break the underlying claim/submission flow.
     console.error("Failed to send email:", err);

@@ -59,6 +59,7 @@ export default function AdminClient({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [notice, setNotice] = useState<string | null>(null);
+  const [submissionsOpen, setSubmissionsOpen] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +123,34 @@ export default function AdminClient({
     await patchClaim(id, { action: "release" });
   }
 
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then((r) => r.json())
+      .then((d) => setSubmissionsOpen(d.submissionsOpen))
+      .catch(() => setSubmissionsOpen(null));
+  }, []);
+
+  async function toggleSubmissions() {
+    if (submissionsOpen === null) return;
+    const next = !submissionsOpen;
+    const msg = next
+      ? "Reopen family submissions? Families will be able to submit again."
+      : "Close family submissions? The form will show a 'sign-ups are closed' message.";
+    if (!confirm(msg)) return;
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ submissionsOpen: next }),
+    });
+    if (res.ok) {
+      setSubmissionsOpen(next);
+      setNotice(next ? "Submissions are now OPEN." : "Submissions are now CLOSED.");
+      setTimeout(() => setNotice(null), 4000);
+    } else {
+      setNotice("Couldn't update submissions setting - please try again.");
+    }
+  }
+
   async function sendReminders(kind: "sponsors" | "moms") {
     const res = await fetch(`/api/admin/reminders/${kind}`, { method: "POST" });
     const data = await res.json();
@@ -164,6 +193,23 @@ export default function AdminClient({
             Log out
           </button>
         </div>
+      </div>
+
+      <div
+        className={`alert ${submissionsOpen === false ? "alert--error" : "alert--info"}`}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}
+      >
+        <span>
+          <strong>Family submissions:</strong>{" "}
+          {submissionsOpen === null ? "checking..." : submissionsOpen ? "OPEN" : "CLOSED"}
+        </span>
+        <button
+          className={`btn btn--small ${submissionsOpen ? "btn--danger" : ""}`}
+          onClick={toggleSubmissions}
+          disabled={submissionsOpen === null}
+        >
+          {submissionsOpen ? "Close submissions" : "Reopen submissions"}
+        </button>
       </div>
 
       <div className="stat-row">

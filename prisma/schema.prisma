@@ -159,3 +159,10 @@ model Claim {
   @@index([status])
   @@index([claimGroupId])
 }
+
+// Simple key/value settings store (e.g. whether family submissions are open).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
